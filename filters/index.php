@@ -1,8 +1,38 @@
 <?
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
-$APPLICATION->SetTitle("filters");
-?>
-<?$APPLICATION->IncludeComponent(
+$APPLICATION->SetTitle("Wiki");
+global $options;
+// фильтры
+global $arrFilter;
+$request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+$queryArr = $request->getQueryList()->getValues();
+
+if (\Bitrix\Main\Loader::includeModule('iblock')) {
+	$rsData = CIBlockProperty::GetList(
+		arFilter: ['IBLOCK_CODE' => 'catalog']
+	);
+
+	$propInfoList = [];
+	while ($arData = $rsData->GetNext()) {
+		$propInfoList[$arData['CODE']] = $arData;
+	}
+
+	// заберем из $queryArr только фильтры
+	$filterParams = array_intersect_key($queryArr, $propInfoList);
+
+	foreach ($filterParams as $key => $value) {
+		$propCode = $propInfoList[$key]['CODE'];
+		$propPostfix = match ($propInfoList[$key]['PROPERTY_TYPE']) {
+			'E' => '.CODE',
+			'L' => '_VALUE',
+			default => '',
+		};
+		$arrFilter['PROPERTY_' . $propCode . $propPostfix] = $value;
+	}
+}
+
+// для применения фильтра в компоненте: "FILTER_NAME" => "arrFilter"
+$APPLICATION->IncludeComponent(
 	"bitrix:news.list", 
 	"wiki_filters", 
 	array(
@@ -26,13 +56,13 @@ $APPLICATION->SetTitle("filters");
 		"DISPLAY_PREVIEW_TEXT" => "N",
 		"DISPLAY_TOP_PAGER" => "N",
 		"FIELD_CODE" => array(
-			0 => "",
+			0 => "SHOW_COUNTER",
 			1 => "",
 		),
-		"FILTER_NAME" => "",
+		"FILTER_NAME" => "arrFilter",
 		"HIDE_LINK_WHEN_NO_DETAIL" => "N",
-		"IBLOCK_ID" => "4",
-		"IBLOCK_TYPE" => "content",
+		"IBLOCK_ID" => "28",
+		"IBLOCK_TYPE" => "Wiki",
 		"INCLUDE_IBLOCK_INTO_CHAIN" => "Y",
 		"INCLUDE_SUBSECTIONS" => "Y",
 		"MESSAGE_404" => "",
@@ -45,10 +75,10 @@ $APPLICATION->SetTitle("filters");
 		"PAGER_TEMPLATE" => ".default",
 		"PAGER_TITLE" => "Новости",
 		"PARENT_SECTION" => "",
-		"PARENT_SECTION_CODE" => "",
+		"PARENT_SECTION_CODE" => $options['CUR_DIR'][1],
 		"PREVIEW_TRUNCATE_LEN" => "",
 		"PROPERTY_CODE" => array(
-			0 => "",
+			0 => "CATEGORY",
 			1 => "",
 		),
 		"SET_BROWSER_TITLE" => "Y",
@@ -66,4 +96,6 @@ $APPLICATION->SetTitle("filters");
 		"COMPONENT_TEMPLATE" => "wiki_filters"
 	),
 	false
-);?>Text her....<?require($_SERVER["DOCUMENT_ROOT"]."/bitrix/footer.php");?>
+);
+
+require($_SERVER["DOCUMENT_ROOT"]."/bitrix/footer.php");

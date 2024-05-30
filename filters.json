@@ -1,0 +1,19 @@
+{
+  "Filters": [
+    {
+      "NAME": "Категория",
+      "CODE": "CATEGORY",
+      "TYPE": "L"
+    },
+    {
+      "NAME": "Рейтинг",
+      "CODE": "RATING",
+      "TYPE": "S"
+    },
+    {
+      "NAME": "Автор",
+      "CODE": "AUTHOR",
+      "TYPE": "E"
+    }
+  ]
+}

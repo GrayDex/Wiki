@@ -17,32 +17,29 @@ $this->setFrameMode(true);
 		<label for="sports">Наука</label><br>
 		<br><br><br>
 
-		<h2>Количество просмотров</h2>
+		<h2>Рейтинг</h2>
 		<label for="from">От:</label>
-		<input type="text" id="from" name="SHOW_COUNTER" value="">
+		<input type="text" id="from" name="RATING" value="">
 		<br><br>
 
 		<label for="to">До:</label>
-		<input type="text" id="to" name="SHOW_COUNTER" value="">
+		<input type="text" id="to" name="RATING" value="">
 		<br><br><br>
 
-		<h2>Сортировать</h2>
-		<label for="sortBy">Sort By:</label>
+		<h2>Автор</h2>
 		<select id="sortBy" name="sortBy">
-			<option name="SORT" value="newest">Сначала новые</option>
-			<option value="oldest">Сначала старые</option>
+			<option name="AUTHOR" value="">Сначала новые</option>
+			<option value="AUTHOR">Сначала старые</option>
 		</select>
-
+		<br><br>
 		<input type="submit" value="Применить">
 	</form>
 </section>
 
-<br><hr><br><br>
+<br>
+<hr><br><br>
 <!-- список новостей -->
 <section>
-	<?php if ($arParams["DISPLAY_TOP_PAGER"]): ?>
-		<?= $arResult["NAV_STRING"] ?><br/>
-	<?php endif; ?>
 	<h2>Список новостей</h2>
 	<?php foreach ($arResult["ITEMS"] as $item): ?>
 		<?php
@@ -50,9 +47,12 @@ $this->setFrameMode(true);
 		$this->AddDeleteAction($item['ID'], $item['DELETE_LINK'], CIBlock::GetArrayByID($item["IBLOCK_ID"], "ELEMENT_DELETE"), array("CONFIRM" => GetMessage('CT_BNL_ELEMENT_DELETE_CONFIRM')));
 		?>
 		<div class="news-$item" data-category="politics" data-date="2022-01-01" id="<?= $this->GetEditAreaId($item['ID']); ?>">
-			<h3>News Title 1</h3>
-			<p>January 1, 2022</p>
-			<p>News Summary 1</p>
+			<h3>Название: <?= $item['NAME'] ?></h3>
+			<p>Категория: <?= $item['PROPERTIES']['CATEGORY']['VALUE'] ?></p>
+			<p>Рейтинг: <?= $item['PROPERTIES']['RATING']['VALUE'] ?></p>
+
+			<p>Автор: <?= $item['PROPERTIES']['AUTHOR']['VALUE'] ?></p>
 		</div>
+		<br><br>
 	<?php endforeach; ?>
 </section>
