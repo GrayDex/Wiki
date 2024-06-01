@@ -1,15 +1,17 @@
-<?
+<?php
 require($_SERVER["DOCUMENT_ROOT"]."/bitrix/header.php");
 $APPLICATION->SetTitle("Wiki");
 global $options;
+
 // фильтры
 global $arrFilter;
 $request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 $queryArr = $request->getQueryList()->getValues();
 
+//dd($queryArr);
 if (\Bitrix\Main\Loader::includeModule('iblock')) {
 	$rsData = CIBlockProperty::GetList(
-		arFilter: ['IBLOCK_CODE' => 'catalog']
+		arFilter: ['IBLOCK_ID' => 28]
 	);
 
 	$propInfoList = [];
@@ -23,7 +25,7 @@ if (\Bitrix\Main\Loader::includeModule('iblock')) {
 	foreach ($filterParams as $key => $value) {
 		$propCode = $propInfoList[$key]['CODE'];
 		$propPostfix = match ($propInfoList[$key]['PROPERTY_TYPE']) {
-			'E' => '.CODE',
+			'E' => '.ID',
 			'L' => '_VALUE',
 			default => '',
 		};

@@ -1,100 +1,131 @@
 <?php if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) die;
+/** @var $arParams */
+/** @var $arResult */
 
-$filterUI = CIBlockSection::GetList(
-	arFilter: ['IBLOCK_ID' => 28, 'CODE' => 'parent'],
-	arSelect: ['UF_FILTERS_JSON']
-)->GetNext()['UF_FILTERS_JSON'];
-
-$res = json_decode($filterUI, true);
-
-dd($res, dump: 1);
-
-// make UI filters
-if (!$_POST['ajaxPage']) {
+// фильтры
+$request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
+if (!($request->isAjaxRequest() && $request->isPost())) {
 
 	$filterUI = [];
 
-	// set up list of filter keys from section field 'UF_FILTER_TUBE'
-	if ($arParams['PARENT_SECTION_CODE']) {
+	// список фильтров из свойства секции
+	if ($arParams['PARENT_SECTION']) {
 
-		$filterUI = CIBlockSection::GetList(
-			arFilter: ['IBLOCK_ID' => 5, 'CODE' => $arParams['PARENT_SECTION_CODE']],
-			arSelect: ['UF_FILTERS']
-		)->GetNext()['UF_FILTERS'];
-	}
+		$filterUIJSON = '';
+		$sectionID = $arParams['PARENT_SECTION'];
+		while (empty($filterUIJSON)) {
 
-	// use default if empty
-	if (!$filterUI) {
-		$rsData = CIBlockElement::GetList(
-			arOrder: ['ID' => 'DESC', 'GLOBAL_ACTIVE' => 'Y'],
-			arFilter: ['IBLOCK_ID' => 9],
-			arSelectFields: ['ID', 'IBLOCK_ID', 'PROPERTY_COMMON_FILTER']
-		);
-		while ($arData = $rsData->GetNext()) {
-			$filterUI[] = $arData['PROPERTY_COMMON_FILTER_VALUE'];
+			$section = CIBlockSection::GetList(
+				arFilter: ['IBLOCK_ID' => $arParams['IBLOCK_ID'], 'ID' => $sectionID],
+				arSelect: ['UF_FILTERS_JSON']
+			)->GetNext();
+
+			$filterUI = json_decode($section['~UF_FILTERS_JSON'], true);
+
+			// если валидный массив то выход
+			if ($filterUI) break;
+
+			// если нет родителя то выход
+			if (!$section['IBLOCK_SECTION_ID']) break;
+
+			$sectionID = $section['IBLOCK_SECTION_ID'];
 		}
 	}
 
-	// get filter props
+	// фильтры из ИБ настроек если не было в секциях
+	if (!$filterUI) {
+
+		$arData = CIBlockElement::GetList(
+			arOrder: ['ID' => 'DESC'],
+			arFilter: ['IBLOCK_ID' => 9],
+			arNavStartParams: ['nTopCount' => 1, 'nPageSize' => 1],
+			arSelectFields: ['PROPERTY_COMMON_FILTERS']
+		)->GetNext();
+
+		$filterUI = json_decode($arData['~PROPERTY_COMMON_FILTERS_VALUE'], true);
+	}
+
+	// если список фильтров есть
 	if ($filterUI) {
+
 		$filterProps = [];
 
-		// get props info
+		// получение всех свойств элементов ИБ
 		$rsData = CIBlockProperty::GetList(
-			arFilter: ['IBLOCK_CODE' => 'catalog']
+			arFilter: ['IBLOCK_ID' => $arParams['IBLOCK_ID']]
 		);
 		while ($arData = $rsData->GetNext()) {
+
 			$filterProps[$arData['CODE']] = $arData;
 		}
 
-		// remove props that not exist into filterUI
-		$filterProps = array_intersect_key($filterProps, array_flip($filterUI));
+		// удаление ненужных сво-в
+		$filterUI = array_intersect_key($filterUI, $filterProps);
 
-		// get values
-		foreach ($filterUI as $code) {
-			if ($filterProps[$code]) {
+		// список значений каждого сво-ва для фильтрации
+		foreach ($filterUI as $code => $value) {
 
-				$filterProps[$code]['VALUES'] = [];
+			$filterProps[$code]['INPUT_TYPE'] = $value['INPUT_TYPE'];
+
+			// список значений текущего сво-ва
+			$filterProps[$code]['VALUES'] = [];
+			$propKey = 'PROPERTY_' . strtoupper($code);
+
+			$rsData = CIBlockElement::GetList(
+				arFilter: [
+					'IBLOCK_ID' => $arParams['IBLOCK_ID'],
+					'ACTIVE' => 'Y',
+					'SECTION_ID' => $arParams['PARENT_SECTION'],
+					'INCLUDE_SUBSECTIONS' => 'Y'
+				],
+				arGroupBy: [$propKey]
+			);
+
+			$data = [];
+			while ($arData = $rsData->GetNext()) {
+
+				if ($arData[$propKey . '_VALUE']) {
+					$data[] = $arData[$propKey . '_VALUE'];
+				}
+			}
+			$data = array_unique($data);
+			natsort($data);
+			$filterProps[$code]['VALUES'] = $data;
+
+			if ($filterProps[$code]['INPUT_TYPE'] === 'RANGE') {
+
+				$filterProps[$code]['VALUES'] = [
+					'MIN_VALUE' => $filterProps[$code]['VALUES'][0],
+					'MAX_VALUE' => $filterProps[$code]['VALUES'][array_key_last($filterProps[$code]['VALUES'])],
+				];
+			}
+
+			// активность параметров фильтра
+			$queryArr = $request->getQuery($code);
+			if ($queryArr){
+
+				foreach ($filterProps[$code]['VALUES'] as $prop){
+
+					$filterProps[$code]['VALUES_ACTIVE'][] = $prop == $queryArr;
+				}
+			}
+
+			// если значение сво-ва - ID
+			if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
+				$filterProps[$code]['VALUES_LINK'] = [];
 				$rsData = CIBlockElement::GetList(
 					arFilter: [
-						'IBLOCK_ID' => $arParams['IBLOCK_ID'],
+						'IBLOCK_ID' => $filterProps[$code]['LINK_IBLOCK_ID'],
 						'ACTIVE' => 'Y',
-						'SECTION_ID' => $arParams['PARENT_SECTION'],
-						'INCLUDE_SUBSECTIONS' => 'Y'
-					],
-					arGroupBy: ['PROPERTY_' . strtoupper($code)]
+						'=ID' => $filterProps[$code]['VALUES']
+					]
 				);
-
-				$data = [];
-				$propKey = 'PROPERTY_' . strtoupper($code) . '_VALUE';
 				while ($arData = $rsData->GetNext()) {
-
-					if ($arData[$propKey]) {
-						$data[] = $arData[$propKey];
-					}
-				}
-				$filterProps[$code]['VALUES'] = array_unique($data);
-
-				if ($filterProps[$code]['VALUES']) {
-					natsort($filterProps[$code]['VALUES']);
-				}
-
-				if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
-					$filterProps[$code]['VALUES_LINK'] = [];
-					$rsData = CIBlockElement::GetList(
-						arFilter: [
-							'IBLOCK_ID' => $filterProps[$code]['LINK_IBLOCK_ID'],
-							'ACTIVE' => 'Y',
-							'=ID' => $filterProps[$code]['VALUES']
-						]
-					);
-					while ($arData = $rsData->GetNext()) {
-						$filterProps[$code]['VALUES_LINK'][] = $arData;
-					}
+					$filterProps[$code]['VALUES_LINK'][] = $arData;
 				}
 			}
 		}
-		$arResult['PROPS']['FILTER_UI'] = array_chunk($filterProps, 6, preserve_keys: true);
-		$arResult['PROPS']['FILTER_UI_MOB'] = $filterProps;
 	}
+	$arResult['FILTER_UI'] = $filterProps;
 }
+dd($arResult['FILTER_UI']);
