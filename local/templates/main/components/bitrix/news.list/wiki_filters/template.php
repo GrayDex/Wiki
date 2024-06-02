@@ -19,6 +19,7 @@ $request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 					<input type="radio" id="<?= $filterValue ?>" name="<?= $filter['CODE'] ?>" value="<?= $filterValue ?>">
 					<label for="<?= $filterValue ?>">
 						<?= $filter['PROPERTY_TYPE'] !== 'E' ? $filterValue : $filter['VALUES_LINK'][$key]['NAME'] ?>
+						(<?= $filter['CNT'][$filterValue] ?: 0 ?>)
 					</label>
 					<br>
 
@@ -32,6 +33,7 @@ $request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 
 							<option value="<?= $filterValue ?>">
 								<?= $filter['PROPERTY_TYPE'] !== 'E' ? $filterValue : $filter['VALUES_LINK'][$key]['NAME'] ?>
+								(<?= $filter['CNT'][$filterValue] ?: 0 ?>)
 							</option>
 
 						<?php endforeach; ?>
@@ -58,7 +60,8 @@ $request = Bitrix\Main\Application::getInstance()->getContext()->getRequest();
 	</form>
 </section>
 
-<br><hr><br><br>
+<br>
+<hr><br><br>
 
 <!-- список новостей -->
 <section>

@@ -52,75 +52,146 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 
 		// получение всех свойств элементов ИБ
 		$rsData = CIBlockProperty::GetList(
-			arFilter: ['IBLOCK_ID' => $arParams['IBLOCK_ID']]
+			arFilter: ['IBLOCK_ID' => $arParams['IBLOCK_ID']],
 		);
 		while ($arData = $rsData->GetNext()) {
 
-			$filterProps[$arData['CODE']] = $arData;
+			$filterProps[$arData['CODE']] = [
+				'ID' => $arData['ID'],
+				'CODE' => $arData['CODE'],
+				'NAME' => $arData['NAME'],
+				'PROPERTY_TYPE' => $arData['PROPERTY_TYPE'],
+				'LINK_IBLOCK_ID' => $arData['LINK_IBLOCK_ID']
+			];
 		}
 
 		// удаление ненужных сво-в
 		$filterUI = array_intersect_key($filterUI, $filterProps);
+		$filterProps = array_intersect_key($filterProps, $filterUI);
 
-		// список значений каждого сво-ва для фильтрации
-		foreach ($filterUI as $code => $value) {
 
-			$filterProps[$code]['INPUT_TYPE'] = $value['INPUT_TYPE'];
+		// получение всех значений
+		$propKeys = [];
+		foreach ($filterProps as $code => $value) {
 
-			// список значений текущего сво-ва
-			$filterProps[$code]['VALUES'] = [];
-			$propKey = 'PROPERTY_' . strtoupper($code);
+			$propKeys[] = 'PROPERTY_' . strtoupper($code);
+		}
 
-			$rsData = CIBlockElement::GetList(
-				arFilter: [
-					'IBLOCK_ID' => $arParams['IBLOCK_ID'],
-					'ACTIVE' => 'Y',
-					'SECTION_ID' => $arParams['PARENT_SECTION'],
-					'INCLUDE_SUBSECTIONS' => 'Y'
-				],
-				arGroupBy: [$propKey]
-			);
+		$rsData = CIBlockElement::GetList(
+			arFilter: [
+				'IBLOCK_ID' => $arParams['IBLOCK_ID'],
+				'ACTIVE' => 'Y',
+				'SECTION_ID' => $arParams['PARENT_SECTION'],
+				'INCLUDE_SUBSECTIONS' => 'Y'
+			],
+			arGroupBy: $propKeys
+		);
 
-			$data = [];
-			while ($arData = $rsData->GetNext()) {
+		while ($arData = $rsData->GetNext()) {
 
-				if ($arData[$propKey . '_VALUE']) {
-					$data[] = $arData[$propKey . '_VALUE'];
+			foreach ($filterProps as $code => $value) {
+
+				if ($arData['PROPERTY_' . $code . '_VALUE']) {
+
+					$filterProps[$code]['VALUES'][] = $arData['PROPERTY_' . $code . '_VALUE'];
 				}
 			}
-			$data = array_unique($data);
-			natsort($data);
-			$filterProps[$code]['VALUES'] = $data;
+		}
 
-			if ($filterProps[$code]['INPUT_TYPE'] === 'RANGE') {
+		// получение всех доступных значений и кол-во доступных элементов с учетом примененных пользователем фильтров
+		$queryArr = $request->getQueryList()->getValues();
+		$queryFilters = [];
+		if (is_array($queryArr)) {
 
-				$filterProps[$code]['VALUES'] = [
-					'MIN_VALUE' => $filterProps[$code]['VALUES'][0],
-					'MAX_VALUE' => $filterProps[$code]['VALUES'][array_key_last($filterProps[$code]['VALUES'])],
-				];
+			$queryArr = array_intersect_key($queryArr, $filterUI);
+			foreach ($queryArr as $code => $value) {
+				if ($value) {
+					$queryFilters['PROPERTY_' . $code] = $value;
+				}
 			}
+		}
 
-			// активность параметров фильтра
-			$queryArr = $request->getQuery($code);
-			if ($queryArr){
+		$availValues = [];
+		$filter = [
+			'IBLOCK_ID' => $arParams['IBLOCK_ID'],
+			'ACTIVE' => 'Y',
+			'SECTION_ID' => $arParams['PARENT_SECTION'],
+			'INCLUDE_SUBSECTIONS' => 'Y'
+		];
+		if ($queryFilters) {
+			$filter = array_merge($filter, $queryFilters);
+		}
+		$rsData = CIBlockElement::GetList(
+			arFilter: $filter,
+			arGroupBy: $propKeys
+		);
+		while ($arData = $rsData->GetNext()) {
 
-				foreach ($filterProps[$code]['VALUES'] as $prop){
+			foreach ($filterProps as $code => $value) {
+				$propValue = $arData['PROPERTY_' . $code . '_VALUE'];
+				if ($propValue) {
 
-					$filterProps[$code]['VALUES_ACTIVE'][] = $prop == $queryArr;
+					$filterProps[$code]['VALUES'] ??= [];
+					$filterProps[$code]['CNT'][$propValue] ??= 0;
+
+					if (!in_array($propValue, $filterProps[$code]['VALUES'])) {
+
+						$filterProps[$code]['VALUES'][] = $propValue;
+					}
+					$filterProps[$code]['CNT'][$propValue] += 1;
+				}
+			}
+		}
+
+		// sort and unique
+		foreach ($filterProps as $code => $value) {
+
+			$filterProps[$code]['INPUT_TYPE'] = $filterUI[$code]['INPUT_TYPE'];
+
+			if (!$value['VALUES'] || !is_array($value['VALUES'])) {
+				continue;
+			}
+			$filterProps[$code]['VALUES'] = array_unique($value['VALUES']);
+			natsort($filterProps[$code]['VALUES']);
+
+			// для восстановления нумерации ключей после сортировки
+			$filterProps[$code]['VALUES'] = array_values($filterProps[$code]['VALUES']);
+
+			// выбранные пользователем параметры фильтра
+			$query = $request->getQuery($code);
+			$filterProps[$code]['IS_SELECTED'] = [];
+
+
+			foreach ($filterProps[$code]['VALUES'] as $key => $prop) {
+
+				if ($query) {
+					// если параметры в виде массива
+					if (is_array($query)) {
+
+						$filterProps[$code]['IS_SELECTED'][$key] = in_array($prop, $query);
+					} else {
+
+						$filterProps[$code]['IS_SELECTED'][$key] = $prop == $query;
+					}
 				}
 			}
 
-			// если значение сво-ва - ID
+
+			// если значение сво-ва - ID элемента другого ИБ
 			if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
+
 				$filterProps[$code]['VALUES_LINK'] = [];
 				$rsData = CIBlockElement::GetList(
 					arFilter: [
 						'IBLOCK_ID' => $filterProps[$code]['LINK_IBLOCK_ID'],
 						'ACTIVE' => 'Y',
 						'=ID' => $filterProps[$code]['VALUES']
-					]
+					],
+					arSelectFields: ['IBLOCK_ID', 'ID', 'CODE', 'NAME']
 				);
+
 				while ($arData = $rsData->GetNext()) {
+
 					$filterProps[$code]['VALUES_LINK'][] = $arData;
 				}
 			}
@@ -128,4 +199,3 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 	}
 	$arResult['FILTER_UI'] = $filterProps;
 }
-dd($arResult['FILTER_UI']);
