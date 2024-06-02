@@ -98,52 +98,7 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 			}
 		}
 
-		// получение всех доступных значений и кол-во доступных элементов с учетом примененных пользователем фильтров
-		$queryArr = $request->getQueryList()->getValues();
-		$queryFilters = [];
-		if (is_array($queryArr)) {
-
-			$queryArr = array_intersect_key($queryArr, $filterUI);
-			foreach ($queryArr as $code => $value) {
-				if ($value) {
-					$queryFilters['PROPERTY_' . $code] = $value;
-				}
-			}
-		}
-
-		$availValues = [];
-		$filter = [
-			'IBLOCK_ID' => $arParams['IBLOCK_ID'],
-			'ACTIVE' => 'Y',
-			'SECTION_ID' => $arParams['PARENT_SECTION'],
-			'INCLUDE_SUBSECTIONS' => 'Y'
-		];
-		if ($queryFilters) {
-			$filter = array_merge($filter, $queryFilters);
-		}
-		$rsData = CIBlockElement::GetList(
-			arFilter: $filter,
-			arGroupBy: $propKeys
-		);
-		while ($arData = $rsData->GetNext()) {
-
-			foreach ($filterProps as $code => $value) {
-				$propValue = $arData['PROPERTY_' . $code . '_VALUE'];
-				if ($propValue) {
-
-					$filterProps[$code]['VALUES'] ??= [];
-					$filterProps[$code]['CNT'][$propValue] ??= 0;
-
-					if (!in_array($propValue, $filterProps[$code]['VALUES'])) {
-
-						$filterProps[$code]['VALUES'][] = $propValue;
-					}
-					$filterProps[$code]['CNT'][$propValue] += 1;
-				}
-			}
-		}
-
-		// sort and unique
+		// сортировка и поиск активных фильтров
 		foreach ($filterProps as $code => $value) {
 
 			$filterProps[$code]['INPUT_TYPE'] = $filterUI[$code]['INPUT_TYPE'];
@@ -160,8 +115,6 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 			// выбранные пользователем параметры фильтра
 			$query = $request->getQuery($code);
 			$filterProps[$code]['IS_SELECTED'] = [];
-
-
 			foreach ($filterProps[$code]['VALUES'] as $key => $prop) {
 
 				if ($query) {
@@ -175,7 +128,6 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 					}
 				}
 			}
-
 
 			// если значение сво-ва - ID элемента другого ИБ
 			if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
@@ -197,5 +149,5 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 			}
 		}
 	}
-	$arResult['FILTER_UI'] = $filterProps;
 }
+$arResult['FILTER_UI'] = $filterProps ?: [];
