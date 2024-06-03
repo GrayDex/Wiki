@@ -69,7 +69,6 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 		$filterUI = array_intersect_key($filterUI, $filterProps);
 		$filterProps = array_intersect_key($filterProps, $filterUI);
 
-
 		// получение всех значений
 		$propKeys = [];
 		foreach ($filterProps as $code => $value) {
@@ -129,10 +128,10 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 				}
 			}
 
-            if($filterProps[$code]['INPUT_TYPE'] === 'RANGE'){
+			if ($filterProps[$code]['INPUT_TYPE'] === 'RANGE') {
 
-                $filterProps[$code]['VALUES'] = ['MIN' => $filterProps[$code]['VALUES'][0], 'MAX' => $filterProps[$code]['VALUES'][array_key_last($filterProps[$code]['VALUES'])]];
-            }
+				$filterProps[$code]['VALUES'] = ['MIN' => $filterProps[$code]['VALUES'][0], 'MAX' => $filterProps[$code]['VALUES'][array_key_last($filterProps[$code]['VALUES'])]];
+			}
 
 			// если значение сво-ва - ID элемента другого ИБ
 			if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
@@ -148,10 +147,46 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 				);
 
 				while ($arData = $rsData->GetNext()) {
-					$filterProps[$code]['VALUES_LINK'][] = $arData;
+					$filterProps[$code]['VALUES_LINK'][$arData['ID']] = $arData;
 				}
 			}
 		}
+		$arResult['FILTER_UI'] = $filterProps ?: [];
 	}
 }
-$arResult['FILTER_UI'] = $filterProps ?: [];
+
+// сбор данных для заполнения контента
+// данные собраны ранее в фильтрах
+if ($arResult['FILTER_UI']['AUTHOR']['VALUES_LINK']) {
+
+	foreach ($arResult['ITEMS'] as $key => $item) {
+
+		$id = $item['PROPERTIES']['AUTHOR']['VALUE'];
+		if ($id) {
+
+			$arResult['ITEMS'][$key]['PROPERTIES']['AUTHOR']['NAME'] = $arResult['FILTER_UI']['AUTHOR']['VALUES_LINK'][$id]['NAME'];
+		}
+	}
+} else {
+
+	// если ajax запрос то нужно собрать
+	$authorsIDs = [];
+	$linkID = 0;
+	foreach ($arResult['ITEMS'] as $item) {
+		if ($item['PROPERTIES']['AUTHOR']['VALUE']) {
+			$linkID ??= $item['PROPERTIES']['AUTHOR']['LINK_IBLOCK_ID'];
+			$authorsIDs[] = $item['PROPERTIES']['AUTHOR']['VALUE'];
+		}
+	}
+	if ($linkID) {
+		$rsData = CIBlockElement::GetList(
+			arFilter: ['IBLOCK_ID' => $linkID, 'ACTIVE' => 'Y', 'ID' => $authorsIDs],
+			arSelectFields: ['IBLOCK_ID', 'ID', 'NAME', 'CODE']
+		);
+		$authorsByID = [];
+		while ($arData = $rsData->GetNext()) {
+
+			$authorsByID[$arData['ID']] = $arData;
+		}
+	}
+}
