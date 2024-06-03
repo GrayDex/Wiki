@@ -129,6 +129,11 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 				}
 			}
 
+            if($filterProps[$code]['INPUT_TYPE'] === 'RANGE'){
+
+                $filterProps[$code]['VALUES'] = ['MIN' => $filterProps[$code]['VALUES'][0], 'MAX' => $filterProps[$code]['VALUES'][array_key_last($filterProps[$code]['VALUES'])]];
+            }
+
 			// если значение сво-ва - ID элемента другого ИБ
 			if ($filterProps[$code]['PROPERTY_TYPE'] === 'E' && $filterProps[$code]['LINK_IBLOCK_ID']) {
 
@@ -143,7 +148,6 @@ if (!($request->isAjaxRequest() && $request->isPost())) {
 				);
 
 				while ($arData = $rsData->GetNext()) {
-
 					$filterProps[$code]['VALUES_LINK'][] = $arData;
 				}
 			}
